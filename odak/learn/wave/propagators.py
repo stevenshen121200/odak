@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import logging
-from .classical import get_propagation_kernel, custom
+from .classical import get_propagation_kernel
 from .util import wavenumber, generate_complex_field, calculate_amplitude, calculate_phase
 from ..tools import zero_pad, crop_center, circular_binary_mask
 
@@ -27,8 +27,6 @@ class propagator():
                  laser_channel_power = None,
                  aperture = None,
                  aperture_size = None,
-                 distances = None,
-                 aperture_samples = [20, 20, 5, 5],
                  method = 'conventional',
                  device = torch.device('cpu')
                 ):
@@ -47,7 +45,7 @@ class propagator():
                                   Number of hologram frames.
                                   Typically, there are three frames, each one for a single color primary.
         number_of_depth_layers  : int
-                                  Equ-distance number of depth layers within the desired volume. If `distances` parameter is passed, this value will be automatically set to the length of the `distances` verson provided.
+                                  Equ-distance number of depth layers within the desired volume.
         volume_depth            : float
                                   Width of the volume along the propagation direction.
         image_location_offset   : float
@@ -64,12 +62,6 @@ class propagator():
                                   Laser channel powers for given number of frames and number of wavelengths.
         aperture                : torch.tensor
                                   Aperture at the Fourier plane.
-        aperture_size           : float
-                                  Aperture width for a circular aperture.
-        aperture_samples        : list
-                                  When using `Impulse Response Fresnel` propagation, these sample counts along X and Y will be used to represent a rectangular aperture. First two is for hologram plane pixel and the last two is for image plane pixel.
-        distances               : torch.tensor
-                                  Propagation distances in meters.
         method                  : str
                                   Hologram type conventional or multi-color.
         device                  : torch.device
@@ -79,41 +71,29 @@ class propagator():
         self.pixel_pitch = pixel_pitch
         self.wavelengths = wavelengths
         self.resolution = resolution
-        self.propagation_type = propagation_type
-        if self.propagation_type != 'Impulse Response Fresnel':
-            resolution_factor = 1
         self.resolution_factor = resolution_factor
         self.number_of_frames = number_of_frames
         self.number_of_depth_layers = number_of_depth_layers
         self.number_of_channels = len(self.wavelengths)
         self.volume_depth = volume_depth
         self.image_location_offset = image_location_offset
+        self.propagation_type = propagation_type
         self.propagator_type = propagator_type
-        self.aperture_samples = aperture_samples
         self.zero_mode_distance = torch.tensor(back_and_forth_distance, device = device)
         self.method = method
         self.aperture = aperture
-        self.init_distances(distances)
+        self.init_distances()
         self.init_kernels()
         self.init_channel_power(laser_channel_power)
         self.init_phase_scale()
         self.set_aperture(aperture, aperture_size)
 
 
-    def init_distances(self, distances):
+    def init_distances(self):
         """
         Internal function to initialize distances.
-
-        Parameters
-        ----------
-        distances               : torch.tensor
-                                  Propagation distances.
         """
-        if isinstance(distances, type(None)):
-            self.distances = torch.linspace(-self.volume_depth / 2., self.volume_depth / 2., self.number_of_depth_layers) + self.image_location_offset
-        else:
-            self.distances = torch.as_tensor(distances)
-            self.number_of_depth_layers = self.distances.shape[0]
+        self.distances = torch.linspace(-self.volume_depth / 2., self.volume_depth / 2., self.number_of_depth_layers) + self.image_location_offset
         logging.warning('Distances: {}'.format(self.distances))
 
 
@@ -240,6 +220,18 @@ class propagator():
         return kernels_amplitude, kernels_phase
 
 
+    def propagate(self, field, H):
+        """
+        Internal function used in propagation. It is a copy of odak.learn.wave.band_limited_angular_spectrum().
+        """
+        field_padded = zero_pad(field)
+        U1 = torch.fft.fftshift(torch.fft.fft2(torch.fft.fftshift(field_padded)))
+        U2 = H * self.aperture * U1
+        result_padded = torch.fft.ifftshift(torch.fft.ifft2(torch.fft.ifftshift(U2)))
+        result = crop_center(result_padded)
+        return result
+
+
     def __call__(self, input_field, channel_id, depth_id):
         """
         Function that represents the forward model in hologram optimization.
@@ -262,38 +254,35 @@ class propagator():
         if not self.generated_kernels[depth_id, channel_id]:
             if self.propagator_type == 'forward':
                 H = get_propagation_kernel(
-                                           nu = self.resolution[0] * 2,
-                                           nv = self.resolution[1] * 2,
+                                           nu = input_field.shape[-2] * 2,
+                                           nv = input_field.shape[-1] * 2,
                                            dx = self.pixel_pitch,
                                            wavelength = self.wavelengths[channel_id],
                                            distance = distance,
                                            device = self.device,
                                            propagation_type = self.propagation_type,
-                                           samples = self.aperture_samples,
                                            scale = self.resolution_factor
                                           )
             elif self.propagator_type == 'back and forth':
                 H_forward = get_propagation_kernel(
-                                                   nu = self.resolution[0] * 2,
-                                                   nv = self.resolution[1] * 2,
+                                                   nu = input_field.shape[-2] * 2,
+                                                   nv = input_field.shape[-1] * 2,
                                                    dx = self.pixel_pitch,
                                                    wavelength = self.wavelengths[channel_id],
                                                    distance = self.zero_mode_distance,
                                                    device = self.device,
                                                    propagation_type = self.propagation_type,
-                                                   samples = self.aperture_samples,
                                                    scale = self.resolution_factor
                                                   )
                 distance_back = -(self.zero_mode_distance + self.image_location_offset - distance)
                 H_back = get_propagation_kernel(
-                                                nu = self.resolution[0] * 2,
-                                                nv = self.resolution[1] * 2,
+                                                nu = input_field.shape[-2] * 2,
+                                                nv = input_field.shape[-1] * 2,
                                                 dx = self.pixel_pitch,
                                                 wavelength = self.wavelengths[channel_id],
                                                 distance = distance_back,
                                                 device = self.device,
                                                 propagation_type = self.propagation_type,
-                                                samples = self.aperture_samples,
                                                 scale = self.resolution_factor
                                                )
                 H = H_forward * H_back
@@ -301,14 +290,11 @@ class propagator():
             self.generated_kernels[depth_id, channel_id] = True
         else:
             H = self.kernels[depth_id, channel_id].detach().clone()
-        field_scale = input_field
-        field_scale_padded = zero_pad(field_scale)
-        output_field_padded = custom(field_scale_padded, H, aperture = self.aperture)
-        output_field = crop_center(output_field_padded)
+        output_field = self.propagate(input_field, H)
         return output_field
 
 
-    def reconstruct(self, hologram_phases, amplitude = None, no_grad = True, get_complex = False):
+    def reconstruct(self, hologram_phases, amplitude = None, no_grad = True):
         """
         Internal function to reconstruct a given hologram.
 
@@ -321,67 +307,60 @@ class propagator():
                                      Amplitude profiles for each color primary [ch x m x n]
         no_grad                    : bool
                                      If set True, uses torch.no_grad in reconstruction.
-        get_complex                : bool
-                                     If set True, reconstructor returns the complex field but not the intensities.
 
         Returns
         -------
-        reconstructions            : torch.tensor
+        reconstruction_intensities : torch.tensor
                                      Reconstructed frames.
         """
+
+        number_of_slms = hologram_phases.shape[1]
         if no_grad:
             torch.no_grad()
-        if len(hologram_phases.shape) > 3:
-            hologram_phases = hologram_phases.squeeze(0)
-        if get_complex == True:
-            reconstruction_type = torch.complex64
-        else:
-            reconstruction_type = torch.float32
-        if hologram_phases.shape[0] != self.number_of_frames:
-            logging.warning('Provided hologram frame count is {} but the configured number of frames is {}.'.format(hologram_phases.shape[0], self.number_of_frames))
-        reconstructions = torch.zeros(
-                                      self.number_of_frames,
-                                      self.number_of_depth_layers,
-                                      self.number_of_channels,
-                                      self.resolution[0] * self.resolution_factor,
-                                      self.resolution[1] * self.resolution_factor,
-                                      dtype = reconstruction_type,
-                                      device = self.device
-                                     )
+        # if len(hologram_phases.shape) > 3:
+        #     hologram_phases = hologram_phases.squeeze(0)
+        reconstruction_intensities = torch.zeros(
+                                                 self.number_of_frames,
+                                                 self.number_of_depth_layers,
+                                                 self.number_of_channels,
+                                                 self.resolution[0] * self.resolution_factor,
+                                                 self.resolution[1] * self.resolution_factor,
+                                                 device = self.device
+                                                )
         if isinstance(amplitude, type(None)):
-            amplitude = torch.zeros(
-                                    self.number_of_channels,
-                                    self.resolution[0] * self.resolution_factor,
-                                    self.resolution[1] * self.resolution_factor,
-                                    device = self.device
-                                   )
-            amplitude[:, ::self.resolution_factor, ::self.resolution_factor] = 1.
-        if self.resolution_factor != 1:
-            hologram_phases_scaled = torch.zeros_like(amplitude)
-            hologram_phases_scaled[
-                                   :,
-                                   ::self.resolution_factor,
-                                   ::self.resolution_factor
-                                  ] = hologram_phases
-        else:
-            hologram_phases_scaled = hologram_phases
+            amplitude = torch.ones(
+                                   self.number_of_channels,
+                                   self.resolution[0] * self.resolution_factor,
+                                   self.resolution[1] * self.resolution_factor,
+                                   device = self.device
+                                  )
         for frame_id in range(self.number_of_frames):
             for depth_id in range(self.number_of_depth_layers):
                 for channel_id in range(self.number_of_channels):
                     laser_power = self.get_laser_powers()[frame_id][channel_id]
-                    phase = hologram_phases_scaled[frame_id]
+                    slm_id = 0
+                    phase = hologram_phases[frame_id][slm_id]
                     hologram = generate_complex_field(
                                                       laser_power * amplitude[channel_id],
                                                       phase * self.phase_scale[channel_id]
                                                      )
-                    reconstruction_field = self.__call__(hologram, channel_id, depth_id)
-                    if get_complex == True:
-                        result = reconstruction_field
+
+                    if number_of_slms == 1:
+                        middle_field = self.__call__(hologram, channel_id, depth_id)
+                        reconstruction_field = middle_field
                     else:
-                        result = calculate_amplitude(reconstruction_field) ** 2
-                    reconstructions[
-                                    frame_id,
-                                    depth_id,
-                                    channel_id
-                                   ] = result.detach().clone()
-        return reconstructions
+                        middle_field = self.__call__(hologram, channel_id, 0)
+                        slm_id = 1
+                        phase = hologram_phases[frame_id][slm_id]
+                        hologram = generate_complex_field(
+                                                          amplitude[channel_id],
+                                                          phase * self.phase_scale[channel_id]
+                                                         )
+                        middle_field = middle_field * hologram
+                        reconstruction_field = self.__call__(middle_field, channel_id, depth_id)
+                    reconstruction_intensities[
+                                               frame_id,
+                                               depth_id,
+                                               channel_id
+                                              ] = calculate_amplitude(reconstruction_field).detach().clone() ** 2
+        return reconstruction_intensities
