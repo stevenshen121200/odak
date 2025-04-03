@@ -11,25 +11,26 @@ class propagator():
     A light propagation model that propagates light to desired image plane with two separate propagations. 
     We use this class in our various works including `Kavaklı et al., Realistic Defocus Blur for Multiplane Computer-Generated Holography`.
     """
+
     def __init__(
-                 self,
-                 resolution = [1920, 1080],
-                 wavelengths = [515e-9,],
-                 pixel_pitch = 8e-6,
-                 resolution_factor = 1,
-                 number_of_frames = 1,
-                 number_of_depth_layers = 1,
-                 volume_depth = 1e-2,
-                 image_location_offset = 5e-3,
-                 propagation_type = 'Bandlimited Angular Spectrum',
-                 propagator_type = 'back and forth',
-                 back_and_forth_distance = 0.3,
-                 laser_channel_power = None,
-                 aperture = None,
-                 aperture_size = None,
-                 method = 'conventional',
-                 device = torch.device('cpu')
-                ):
+            self,
+            resolution=[1920, 1080],
+            wavelengths=[515e-9, ],
+            pixel_pitch=8e-6,
+            resolution_factor=1,
+            number_of_frames=1,
+            number_of_depth_layers=1,
+            volume_depth=1e-2,
+            image_location_offset=5e-3,
+            propagation_type='Bandlimited Angular Spectrum',
+            propagator_type='back and forth',
+            back_and_forth_distance=0.3,
+            laser_channel_power=None,
+            aperture=None,
+            aperture_size=None,
+            method='conventional',
+            device=torch.device('cpu')
+    ):
         """
         Parameters
         ----------
@@ -79,7 +80,7 @@ class propagator():
         self.image_location_offset = image_location_offset
         self.propagation_type = propagation_type
         self.propagator_type = propagator_type
-        self.zero_mode_distance = torch.tensor(back_and_forth_distance, device = device)
+        self.zero_mode_distance = torch.tensor(back_and_forth_distance, device=device)
         self.method = method
         self.aperture = aperture
         self.init_distances()
@@ -88,33 +89,31 @@ class propagator():
         self.init_phase_scale()
         self.set_aperture(aperture, aperture_size)
 
-
     def init_distances(self):
         """
         Internal function to initialize distances.
         """
-        self.distances = torch.linspace(-self.volume_depth / 2., self.volume_depth / 2., self.number_of_depth_layers) + self.image_location_offset
+        self.distances = torch.linspace(-self.volume_depth / 2., self.volume_depth / 2.,
+                                        self.number_of_depth_layers) + self.image_location_offset
         logging.warning('Distances: {}'.format(self.distances))
-
 
     def init_kernels(self):
         """
         Internal function to initialize kernels.
         """
         self.generated_kernels = torch.zeros(
-                                             self.number_of_depth_layers,
-                                             self.number_of_channels,
-                                             device = self.device
-                                            )
+            self.number_of_depth_layers,
+            self.number_of_channels,
+            device=self.device
+        )
         self.kernels = torch.zeros(
-                                   self.number_of_depth_layers,
-                                   self.number_of_channels,
-                                   self.resolution[0] * self.resolution_factor * 2,
-                                   self.resolution[1] * self.resolution_factor * 2,
-                                   dtype = torch.complex64,
-                                   device = self.device
-                                  )
-
+            self.number_of_depth_layers,
+            self.number_of_channels,
+            self.resolution[0] * self.resolution_factor * 2,
+            self.resolution[1] * self.resolution_factor * 2,
+            dtype=torch.complex64,
+            device=self.device
+        )
 
     def init_channel_power(self, channel_power):
         """
@@ -123,12 +122,11 @@ class propagator():
         self.channel_power = channel_power
         if isinstance(self.channel_power, type(None)):
             self.channel_power = torch.eye(
-                                           self.number_of_frames,
-                                           self.number_of_channels,
-                                           device = self.device,
-                                           requires_grad = False
-                                          )
-
+                self.number_of_frames,
+                self.number_of_channels,
+                device=self.device,
+                requires_grad=False
+            )
 
     def init_phase_scale(self):
         """
@@ -136,17 +134,16 @@ class propagator():
         In some cases, you may want to modify this init to ratio phases for different color primaries as an SLM is configured for a specific central wavelength.
         """
         self.phase_scale = torch.tensor(
-                                        [
-                                         1.,
-                                         1.,
-                                         1.
-                                        ],
-                                        requires_grad = False,
-                                        device = self.device
-                                       )
+            [
+                1,
+                650/550,
+                650/450
+            ],
+            requires_grad=False,
+            device=self.device
+        )
 
-
-    def set_aperture(self, aperture = None, aperture_size = None):
+    def set_aperture(self, aperture=None, aperture_size=None):
         """
         Set aperture in the Fourier plane.
 
@@ -162,19 +159,18 @@ class propagator():
         if isinstance(aperture, type(None)):
             if isinstance(aperture_size, type(None)):
                 aperture_size = torch.max(
-                                          torch.tensor([
-                                                        self.resolution[0] * self.resolution_factor, 
-                                                        self.resolution[1] * self.resolution_factor
-                                                       ])
-                                         )
+                    torch.tensor([
+                        self.resolution[0] * self.resolution_factor,
+                        self.resolution[1] * self.resolution_factor
+                    ])
+                )
             self.aperture = circular_binary_mask(
-                                                 self.resolution[0] * self.resolution_factor * 2,
-                                                 self.resolution[1] * self.resolution_factor * 2,
-                                                 aperture_size,
-                                                ).to(self.device) * 1.
+                self.resolution[0] * self.resolution_factor * 2,
+                self.resolution[1] * self.resolution_factor * 2,
+                aperture_size,
+            ).to(self.device) * 1.
         else:
             self.aperture = zero_pad(aperture).to(self.device) * 1.
-
 
     def get_laser_powers(self):
         """
@@ -191,7 +187,6 @@ class propagator():
             laser_power = torch.abs(torch.cos(self.channel_power))
         return laser_power
 
-
     def set_laser_powers(self, laser_power):
         """
         Internal function to set the laser powers.
@@ -202,8 +197,6 @@ class propagator():
                            Laser powers.
         """
         self.channel_power = laser_power
-
-
 
     def get_kernels(self):
         """
@@ -219,7 +212,6 @@ class propagator():
         kernels_phase = calculate_phase(h)
         return kernels_amplitude, kernels_phase
 
-
     def propagate(self, field, H):
         """
         Internal function used in propagation. It is a copy of odak.learn.wave.band_limited_angular_spectrum().
@@ -230,7 +222,6 @@ class propagator():
         result_padded = torch.fft.ifftshift(torch.fft.ifft2(torch.fft.ifftshift(U2)))
         result = crop_center(result_padded)
         return result
-
 
     def __call__(self, input_field, channel_id, depth_id):
         """
@@ -254,37 +245,37 @@ class propagator():
         if not self.generated_kernels[depth_id, channel_id]:
             if self.propagator_type == 'forward':
                 H = get_propagation_kernel(
-                                           nu = input_field.shape[-2] * 2,
-                                           nv = input_field.shape[-1] * 2,
-                                           dx = self.pixel_pitch,
-                                           wavelength = self.wavelengths[channel_id],
-                                           distance = distance,
-                                           device = self.device,
-                                           propagation_type = self.propagation_type,
-                                           scale = self.resolution_factor
-                                          )
+                    nu=input_field.shape[-2] * 2,
+                    nv=input_field.shape[-1] * 2,
+                    dx=self.pixel_pitch,
+                    wavelength=self.wavelengths[channel_id],
+                    distance=distance,
+                    device=self.device,
+                    propagation_type=self.propagation_type,
+                    scale=self.resolution_factor
+                )
             elif self.propagator_type == 'back and forth':
                 H_forward = get_propagation_kernel(
-                                                   nu = input_field.shape[-2] * 2,
-                                                   nv = input_field.shape[-1] * 2,
-                                                   dx = self.pixel_pitch,
-                                                   wavelength = self.wavelengths[channel_id],
-                                                   distance = self.zero_mode_distance,
-                                                   device = self.device,
-                                                   propagation_type = self.propagation_type,
-                                                   scale = self.resolution_factor
-                                                  )
+                    nu=input_field.shape[-2] * 2,
+                    nv=input_field.shape[-1] * 2,
+                    dx=self.pixel_pitch,
+                    wavelength=self.wavelengths[channel_id],
+                    distance=self.zero_mode_distance,
+                    device=self.device,
+                    propagation_type=self.propagation_type,
+                    scale=self.resolution_factor
+                )
                 distance_back = -(self.zero_mode_distance + self.image_location_offset - distance)
                 H_back = get_propagation_kernel(
-                                                nu = input_field.shape[-2] * 2,
-                                                nv = input_field.shape[-1] * 2,
-                                                dx = self.pixel_pitch,
-                                                wavelength = self.wavelengths[channel_id],
-                                                distance = distance_back,
-                                                device = self.device,
-                                                propagation_type = self.propagation_type,
-                                                scale = self.resolution_factor
-                                               )
+                    nu=input_field.shape[-2] * 2,
+                    nv=input_field.shape[-1] * 2,
+                    dx=self.pixel_pitch,
+                    wavelength=self.wavelengths[channel_id],
+                    distance=distance_back,
+                    device=self.device,
+                    propagation_type=self.propagation_type,
+                    scale=self.resolution_factor
+                )
                 H = H_forward * H_back
             self.kernels[depth_id, channel_id] = H
             self.generated_kernels[depth_id, channel_id] = True
@@ -293,8 +284,7 @@ class propagator():
         output_field = self.propagate(input_field, H)
         return output_field
 
-
-    def reconstruct(self, hologram_phases, amplitude = None, no_grad = True):
+    def reconstruct(self, hologram_phases, amplitude=None, no_grad=True):
         """
         Internal function to reconstruct a given hologram.
 
@@ -320,20 +310,20 @@ class propagator():
         # if len(hologram_phases.shape) > 3:
         #     hologram_phases = hologram_phases.squeeze(0)
         reconstruction_intensities = torch.zeros(
-                                                 self.number_of_frames,
-                                                 self.number_of_depth_layers,
-                                                 self.number_of_channels,
-                                                 self.resolution[0] * self.resolution_factor,
-                                                 self.resolution[1] * self.resolution_factor,
-                                                 device = self.device
-                                                )
+            self.number_of_frames,
+            self.number_of_depth_layers,
+            self.number_of_channels,
+            self.resolution[0] * self.resolution_factor,
+            self.resolution[1] * self.resolution_factor,
+            device=self.device
+        )
         if isinstance(amplitude, type(None)):
             amplitude = torch.ones(
-                                   self.number_of_channels,
-                                   self.resolution[0] * self.resolution_factor,
-                                   self.resolution[1] * self.resolution_factor,
-                                   device = self.device
-                                  )
+                self.number_of_channels,
+                self.resolution[0] * self.resolution_factor,
+                self.resolution[1] * self.resolution_factor,
+                device=self.device
+            )
         for frame_id in range(self.number_of_frames):
             for depth_id in range(self.number_of_depth_layers):
                 for channel_id in range(self.number_of_channels):
@@ -341,9 +331,9 @@ class propagator():
                     slm_id = 0
                     phase = hologram_phases[frame_id][slm_id]
                     hologram = generate_complex_field(
-                                                      laser_power * amplitude[channel_id],
-                                                      phase * self.phase_scale[channel_id]
-                                                     )
+                        laser_power * amplitude[channel_id],
+                        phase * self.phase_scale[channel_id]
+                    )
 
                     if number_of_slms == 1:
                         middle_field = self.__call__(hologram, channel_id, depth_id)
@@ -353,14 +343,14 @@ class propagator():
                         slm_id = 1
                         phase = hologram_phases[frame_id][slm_id]
                         hologram = generate_complex_field(
-                                                          amplitude[channel_id],
-                                                          phase * self.phase_scale[channel_id]
-                                                         )
+                            amplitude[channel_id],
+                            phase * self.phase_scale[channel_id]
+                        )
                         middle_field = middle_field * hologram
                         reconstruction_field = self.__call__(middle_field, channel_id, depth_id)
                     reconstruction_intensities[
-                                               frame_id,
-                                               depth_id,
-                                               channel_id
-                                              ] = calculate_amplitude(reconstruction_field).detach().clone() ** 2
+                        frame_id,
+                        depth_id,
+                        channel_id
+                    ] = calculate_amplitude(reconstruction_field).detach().clone() ** 2
         return reconstruction_intensities

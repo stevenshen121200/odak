@@ -87,9 +87,9 @@ class multi_color_hologram_optimizer():
         if self.method == 'conventional':
             self.phase_scale = torch.tensor(
                 [
-                    1.,
-                    1.,
-                    1.
+                    1,
+                    650 / 550,
+                    650 / 450
                 ],
                 requires_grad=False,
                 device=self.device
@@ -97,9 +97,9 @@ class multi_color_hologram_optimizer():
         if self.method == 'multi-color':
             self.phase_scale = torch.tensor(
                 [
-                    1.,
-                    1.,
-                    1.
+                    1,
+                    650 / 550,
+                    650 / 450
                 ],
                 requires_grad=False,
                 device=self.device
@@ -190,9 +190,15 @@ class multi_color_hologram_optimizer():
     def evaluate(self, input_image, target_image, plane_id=0):
         """
         Internal function to evaluate the loss.
+        First converts the RGB images to CIEXYZ, then computes the MSE loss.
         """
+        # Convert the images from RGB to CIEXYZ
+        input_xyz = self.spectral_to_xyz(input_image)
+        target_xyz = self.spectral_to_xyz(target_image)
+
         if self.loss_type == 'conventional':
             loss = self.loss_function(input_image, target_image)
+            # loss += self.loss_function(input_xyz, target_xyz)
         elif self.loss_type == 'custom':
             loss = 0
             for i in range(len(self.wavelengths)):
@@ -201,7 +207,67 @@ class multi_color_hologram_optimizer():
                     target_image[i],
                     plane_id=plane_id
                 )
+                # loss += self.loss_function(
+                #     input_xyz[i],
+                #     target_xyz[i],
+                #     plane_id=plane_id
+                # )
         return loss
+
+    def rgb_to_xyz(self, rgb):
+        """
+        Convert an RGB image tensor (shape: [3, H, W]) to the CIEXYZ color space.
+        Assumes the RGB image is in linear space and normalized to [0, 1].
+        Uses the standard sRGB-to-XYZ conversion matrix (D65 illuminant).
+        """
+        conversion_matrix = torch.tensor(
+            [[0.412453, 0.357580, 0.180423],
+             [0.212671, 0.715160, 0.072169],
+             [0.019334, 0.119193, 0.950227]],
+            device=rgb.device, dtype=rgb.dtype
+        )
+        C, H, W = rgb.shape
+        # Reshape to [3, H*W] then transpose to [H*W, 3] for matrix multiplication.
+        rgb_flat = rgb.view(3, -1).T  # shape: [H*W, 3]
+        xyz_flat = torch.matmul(rgb_flat, conversion_matrix.T)  # shape: [H*W, 3]
+        xyz = xyz_flat.T.view(3, H, W)  # shape: [3, H, W]
+        return xyz
+
+    def spectral_to_xyz(self, spectral_img):
+        """
+        Convert a 3-channel spectral image (650nm, 550nm, 450nm) to CIEXYZ.
+        Input shape: [3, H, W]
+        """
+        # LMS cone sensitivity approximations at [650, 550, 450] nm
+        # Values roughly estimated from Stockman & Sharpe 2-deg cone fundamentals
+        # These can be fine-tuned with actual color matching functions (CMFs)
+        # Columns: wavelengths 650nm, 550nm, 450nm
+        lms_sensitivities = torch.tensor([
+            [0.1, 0.7, 0.0],  # L-cone (long, red)
+            [0.0, 1.0, 0.0],  # M-cone (medium, green)
+            [0.0, 0.1, 0.8],  # S-cone (short, blue)
+        ], dtype=spectral_img.dtype, device=spectral_img.device)  # shape: [3 (LMS), 3 (wavelengths)]
+
+        # Convert [3, H, W] to [H*W, 3]
+        C, H, W = spectral_img.shape
+        spectral_flat = spectral_img.view(C, -1).T  # shape: [H*W, 3]
+
+        # Compute LMS responses: [H*W, 3 (LMS)]
+        lms_flat = spectral_flat @ lms_sensitivities.T
+
+        # LMS to XYZ conversion matrix (Hunt-Pointer-Estevez)
+        lms_to_xyz = torch.tensor([
+            [1.94735469, -1.41445123, 0.36476327],
+            [0.68990272, 0.34832189, 0.00000000],
+            [0.00000000, 0.00000000, 1.93485343]
+        ], dtype=spectral_img.dtype, device=spectral_img.device)
+
+        # Compute XYZ: [H*W, 3]
+        xyz_flat = lms_flat @ lms_to_xyz.T
+
+        # Reshape back to [3, H, W]
+        xyz = xyz_flat.T.view(3, H, W)
+        return xyz
 
     def double_phase_constrain(self, phase, phase_offset):
         """
@@ -221,7 +287,9 @@ class multi_color_hologram_optimizer():
         """
         phase_zero_mean = phase - torch.mean(phase)
         phase_low = torch.nan_to_num(phase_zero_mean - phase_offset, nan=2 * np.pi)
+        phase_low = phase_low % (2 * np.pi)
         phase_high = torch.nan_to_num(phase_zero_mean + phase_offset, nan=2 * np.pi)
+        phase_high = phase_high % (2 * np.pi)
         loss = multi_scale_total_variation_loss(phase_low, levels=6)
         loss += multi_scale_total_variation_loss(phase_high, levels=6)
         loss += torch.std(phase_low)
@@ -250,8 +318,8 @@ class multi_color_hologram_optimizer():
                                      Constrained output phase.
         """
         phase_only = torch.nan_to_num(phase - phase_offset, nan=2 * np.pi)
-        loss = multi_scale_total_variation_loss(phase, levels=6)
-        loss += multi_scale_total_variation_loss(phase_offset, levels=6)
+        phase_only = ((torch.sin(phase_only) + 1) * 0.5) * 2 * np.pi
+        loss = multi_scale_total_variation_loss(phase_only, levels=6)
         return phase_only, loss
 
     def gradient_descent(self, number_of_iterations=100, weights=[1., 1., 0., 0.]):
