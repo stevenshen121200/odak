@@ -1,0 +1,162 @@
+
+site_name: Odak
+site_description: The fundamental library for scientific computing in optical and visual perception sciences.
+site_author: Kaan Akşit
+site_url: 'https://kaanaksit.github.io/odak/'
+
+repo_name: kaanaksit/odak
+repo_url: 'https://github.com/kaanaksit/odak'
+
+copyright: 'Copyright &copy; 2023'
+
+nav:
+  - Getting started:
+    - Introduction: 'index.md'
+    - Installation: 'installation.md'
+    - What is Odak?: 'beginning.md'
+    - Contributing: 'contributing.md'
+  - Computational Light Course:
+    - Prerequisites and general information: 'course/index.md'
+    - Light, Computation, and Computational Light: 'course/computational_light.md'
+    - Fundamentals in optimizing and learning light: 'course/fundamentals.md'
+    - Modeling light with rays: 'course/geometric_optics.md'
+    - Computer-Generated Holography: 'course/computer_generated_holography.md'
+    - Visual Perception: 'course/visual_perception.md'
+    - Computational Displays: 'course/computational_displays.md'
+    - Computational Imaging and Sensing: 'course/computational_imaging.md'
+    - All-optical Machine Learning: 'course/photonic_computers.md'
+  - Computer-Generated Holography:
+    - Introduction:
+       - Getting Started: 'cgh.md'
+       - Holographic Light Transport: 'notes/holographic_light_transport.md'
+       - Hologram Optimization: 'notes/optimizing_holograms_using_odak.md'
+    - odak.wave: 'odak/wave.md'
+    - odak.learn.wave: 'odak/learn_wave.md'
+  - Lensless Imaging:
+    - Introduction:
+       - Getting Started: 'lensless.md' 
+    - odak.learn.lensless: 'odak/learn_lensless.md'
+  - General toolkit:
+    - Introduction: 'toolkit.md'
+    - odak.tools: 'odak/tools.md'
+    - odak.learn.tools: 'odak/learn_tools.md'
+  - Machine learning:
+    - Introduction: 'machine_learning.md'
+    - odak.fit: 'odak/fit.md'
+    - odak.learn.models : 'odak/learn_models.md'
+  - Raytracing:
+    - Introduction: 'raytracing.md'
+    - odak.raytracing: 'odak/raytracing.md'
+    - odak.learn.raytracing: 'odak/learn_raytracing.md'
+  - Visual perception:
+    - Introduction: 
+       - Getting Started: 'perception.md'
+       - Using metameric loss: 'notes/using_metameric_loss.md'
+    - odak.learn.perception: 'odak/learn_perception.md'
+
+theme:
+    name: material
+    custom_dir: overrides
+    logo: odak.png
+    favicon: odak.png
+    icon:
+        logo: logo
+    features:
+        - content.tooltips
+        - content.code.copy
+        - content.code.select
+        - content.code.annotate
+        - content.tabs.link
+        - navigation.tabs.sticky
+        - navigation.top
+        - navigation.tracking
+        - navigation.instant
+        - navigation.indexes
+        - navigation.footer
+        - search.share
+        - search.suggest
+        - search.highlight
+    palette:
+        - scheme: odak
+          toggle:
+              icon: material/brightness-7 
+              name: Switch to dark mode
+        - scheme: slate
+          toggle:
+              icon: material/brightness-4
+              name: Switch to light mode
+    highlightjs: true
+    hljs_languages:
+        - python
+
+plugins:
+   - search
+   - mkdocstrings:
+       default_handler: python
+       handlers:
+          python:
+            options:
+              ignore_init_summary: true
+              docstring_section_style: list
+              docstring_style: numpy
+              show_source: true
+   - autorefs
+   - glightbox:
+       touchNavigation: true
+       loop: false
+       effect: zoom
+       slide_effect: slide
+       width: 100%
+       height: auto
+       zoomable: true
+       draggable: true
+       skip_classes:
+         - custom-skip-class-name
+       auto_caption: false
+       caption_position: bottom
+   - bibtex:
+      bib_file: "docs/bibliography.bib"
+
+markdown_extensions:
+   - abbr
+   - footnotes
+   - toc:
+       permalink: true
+       toc_depth: 4
+   - admonition
+   - attr_list
+   - md_in_html
+   - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+   - pymdownx.inlinehilite
+   - pymdownx.superfences
+   - pymdownx.tabbed:
+      alternate_style: true
+   - pymdownx.snippets:
+      auto_append:
+       - includes/abbreviations.md
+   - pymdownx.superfences
+   - pymdownx.details
+   - pymdownx.tasklist
+   - pymdownx.arithmatex:
+       generic: true
+   - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_javascript:
+   - 'javascripts/config.js'
+   - 'https://polyfill.io/v3/polyfill.min.js?features=es6'
+   - 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+extra:
+  annotate:
+    json: [.s2]
+  social:
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/kaanaksit
+    - icon: fontawesome/brands/slack
+      link: https://join.slack.com/t/rpcdrendering-m4b9370/shared_invite/zt-13b5caruu-o7Ra99nEXkntnJqVYJTVdg
+extra_css:
+  - stylesheets/extra.css

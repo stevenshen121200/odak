@@ -1,0 +1,61 @@
+{
+    "general": {
+        "device": "cuda",
+        "iterations": 1000,
+        "output directory": "./mod2pi/",
+        "learning rate": 0.025,
+        "learning rate floor": 0.005,
+        "loss weights": [
+            3.0,
+            0,
+            0.01
+        ],
+        "double phase constrain": 0,
+        "method": "multi-color",
+        "reduction": "mean"
+    },
+    "target": {
+        "image filename": "./input/hd/holographic_glasses.png",
+        "depth filename": "./input/hd/holographic_glasses.png",
+        "channel power filename": "",
+        "number of frames": 1,
+        "color depth": 8,
+        "peak amplitude": 1.0,
+        "number of depth layers": 1,
+        "volume depth": 0.01,
+        "location offset": 0.1,
+        "defocus blur size": 20,
+        "blur ratio": 3,
+        "scheme": "defocus",
+        "weights": [
+            1.0,
+            1.0,
+            1.0,
+            0.0
+        ],
+        "optimize peak amplitude": 0,
+        "eye aperture size": 1080,
+        "img loss threshold": 0.01
+    },
+    "spatial light modulator": {
+        "model": "Holoeye Pluto 1.3.3",
+        "pixel pitch": 8e-06,
+        "resolution": [
+            1080,
+            1920
+        ],
+        "number of slms": 2
+    },
+    "beam": {
+        "wavelengths": [
+            6.5e-07,
+            5.5e-07,
+            4.5e-07
+        ],
+        "pinhole size": 1600,
+        "beam profile": "",
+        "save at every": 100,
+        "propagation type": "Bandlimited Angular Spectrum",
+        "propagator type": "forward"
+    }
+}
